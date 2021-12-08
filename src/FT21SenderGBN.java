@@ -26,6 +26,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private int BlockSize;
     private int nextPacketSeqN, lastPacketSeqN;
     private int windowsize;
+    private int lastACKRecieved;
 
     private State state;
     private int lastPacketSent;
@@ -52,11 +53,23 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     public void on_clock_tick(int now) {
         boolean canSend = lastPacketSent < 0 || (now - lastPacketSent) > TIMEOUT;
 
-        if (state != State.FINISHED && canSend){
+        if (state == State.FINISHED && canSend){
             sendNextPacket(now);
+        }else if (state != State.FINISHED && canSend){
+           if(lastACKRecieved<0){
+               nextPacketSeqN=0;
+               state = State.BEGINNING;
+           }
+            sendNextPacket(now);
+            nextPacketSeqN++;
         }
 
-        nextPacketSeqN++;
+        if(nextPacketSeqN>0)
+            state = State.UPLOADING;
+
+        if (nextPacketSeqN > lastPacketSeqN)
+            state = State.FINISHING;
+
 
     }
 
@@ -79,20 +92,24 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
     @Override
     public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
+        checkAKC(ack);
         switch (state) {
             case BEGINNING:
-                state = State.UPLOADING;
+
             case UPLOADING:
-                nextPacketSeqN = ack.cSeqN + 1;
-                if (nextPacketSeqN > lastPacketSeqN)
-                    state = State.FINISHING;
-                break;
+
             case FINISHING:
                 super.log(now, "All Done. Transfer complete...");
                 super.printReport(now);
                 state = State.FINISHED;
                 return;
             case FINISHED:
+        }
+    }
+
+    private void checkAKC(FT21_AckPacket ack){
+        if(ack.cSeqN+ windowsize < nextPacketSeqN){
+            nextPacketSeqN = ack.cSeqN + 1;
         }
     }
 
