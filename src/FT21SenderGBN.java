@@ -53,16 +53,23 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     public void on_clock_tick(int now) {
         boolean canSend = lastPacketSent < 0 || (now - lastPacketSent) > TIMEOUT;
 
-        if (state == State.FINISHED && canSend){
-            sendNextPacket(now);
-        }else if (state != State.FINISHED && canSend){
-           if(lastACKRecieved<0){
-               nextPacketSeqN=0;
-               state = State.BEGINNING;
-           }
-            sendNextPacket(now);
-            nextPacketSeqN++;
+
+        if (state != State.FINISHED && canSend) {
+            if (state == State.FINISHING && canSend) {
+                sendNextPacket(now);
+            } else {
+                if (lastACKRecieved < 0) {
+                    nextPacketSeqN = 0;
+                    state = State.BEGINNING;
+                }
+                sendNextPacket(now);
+                nextPacketSeqN++;
+            }
+
         }
+
+        if (lastACKRecieved < 0)
+            state = State.BEGINNING;
 
         if(nextPacketSeqN>0)
             state = State.UPLOADING;
@@ -70,6 +77,10 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         if (nextPacketSeqN > lastPacketSeqN)
             state = State.FINISHING;
 
+
+    }
+
+    private void changeState(){
 
     }
 
@@ -92,17 +103,26 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
     @Override
     public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
-        checkAKC(ack);
+        lastACKRecieved = ack.cSeqN;
+
         switch (state) {
             case BEGINNING:
-
+                if(lastACKRecieved == 0)
+                    state = State.UPLOADING;
+            break;
             case UPLOADING:
-
+                nextPacketSeqN = ack.cSeqN + 1;
+                if (nextPacketSeqN > lastPacketSeqN)
+                    state = State.FINISHING;
+                break;
             case FINISHING:
-                super.log(now, "All Done. Transfer complete...");
-                super.printReport(now);
-                state = State.FINISHED;
-                return;
+                if(lastACKRecieved == lastPacketSeqN + 1) {
+                    super.log(now, "All Done. Transfer complete...");
+                    super.printReport(now);
+                    state = State.FINISHED;
+                    return;
+                }
+            break;
             case FINISHED:
         }
     }
