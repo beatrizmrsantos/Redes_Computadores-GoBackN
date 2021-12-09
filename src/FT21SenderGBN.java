@@ -29,7 +29,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private int nextPacketSeqN, lastPacketSeqN;
     private int windowsize;
     private int lastACKRecieved;
-    private List<Integer> window;
+    private boolean repeatedACK;
+    private List<Integer> times;
 
     private State state;
     private int lastPacketSent;
@@ -45,20 +46,30 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         file = new File(args[0]);
         BlockSize = Integer.parseInt(args[1]);
         windowsize = Integer.parseInt(args[2]);
-        window = new LinkedList<Integer>();
+        times = new LinkedList<Integer>();
 
         state = State.BEGINNING;
         lastPacketSeqN = (int) Math.ceil(file.length() / (double) BlockSize);
 
-        lastPacketSent = -1;
+        //lastPacketSent = -1;
         return 1;
     }
 
     public void on_clock_tick(int now) {
-        boolean canSend = lastPacketSent < 0 || (now - lastPacketSent) > TIMEOUT;
+        boolean canSend = times.size()<=windowsize && state != State.FINISHED;
 
+        repeatedACK();
+        timer(now);
 
-        if (state != State.FINISHED && canSend && window.size()<=windowsize) {
+        changeState();
+
+        if(canSend){
+            sendNextPacket(now);
+            nextPacketSeqN++;
+        }
+
+        /*
+        if (state != State.FINISHED && canSend && times.size()<=windowsize) {
             if (state == State.FINISHING && canSend) {
                 sendNextPacket(now);
             } else {
@@ -69,8 +80,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 sendNextPacket(now);
                 nextPacketSeqN++;
             }
-            window.add(now);
-            lastPacketSent= window.get(0);
+            times.add(now);
+            lastPacketSent= times.get(0);
         }
 
         if (lastACKRecieved < 0)
@@ -82,11 +93,37 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         if (nextPacketSeqN > lastPacketSeqN)
             state = State.FINISHING;
 
-
+        */
     }
 
     private void changeState(){
 
+        if (nextPacketSeqN == 0){
+            state = State.BEGINNING;
+        } else {
+            if(nextPacketSeqN>0){
+                state = State.UPLOADING;
+            } else {
+                if (nextPacketSeqN > lastPacketSeqN){
+                    state = State.FINISHING;
+                }
+            }
+        }
+
+    }
+
+    private void repeatedACK(){
+        if(repeatedACK){
+            nextPacketSeqN = lastACKRecieved + 1;
+            times.clear();
+        }
+    }
+
+    private void timer(int now){
+        if((now - times.get(0)) > TIMEOUT ){
+            nextPacketSeqN = lastACKRecieved + 1;
+            times.clear();
+        }
     }
 
     private void sendNextPacket(int now) {
@@ -102,37 +139,29 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 break;
             case FINISHED:
         }
-
-        //lastPacketSent = now;
+        times.add(now);
     }
 
     @Override
     public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
-        lastACKRecieved = ack.cSeqN;
+        if(lastACKRecieved == ack.cSeqN){
+            repeatedACK = true;
 
-        switch (state) {
-            case BEGINNING:
-                if(lastACKRecieved == 0)
-                    state = State.UPLOADING;
-            break;
-            case UPLOADING:
-                nextPacketSeqN = ack.cSeqN + 1;
-                if (nextPacketSeqN > lastPacketSeqN)
-                    state = State.FINISHING;
-                break;
-            case FINISHING:
-                if(lastACKRecieved == lastPacketSeqN + 1) {
-                    super.log(now, "All Done. Transfer complete...");
-                    super.printReport(now);
-                    state = State.FINISHED;
-                    return;
-                }
-            break;
-            case FINISHED:
+        } else {
+            lastACKRecieved = ack.cSeqN;
+            times.remove(0);
         }
 
-        window.remove(0);
-        lastPacketSent=window.get(0);
+
+        if(state == State.FINISHING){
+            super.log(now, "All Done. Transfer complete...");
+            super.printReport(now);
+            state = State.FINISHED;
+            //return;
+        }
+
+        times.remove(0);
+        lastPacketSent = times.get(0);
 
     }
 
