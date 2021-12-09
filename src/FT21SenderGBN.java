@@ -29,14 +29,15 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private int nextPacketSeqN, lastPacketSeqN;
     private int windowsize;
     private int lastACKRecieved;
+    private boolean negativeACK;
     private boolean repeatedACK;
     private List<Integer> times;
 
     private State state;
-    private int lastPacketSent;
+   // private int lastPacketSent;
 
     public FT21SenderGBN() {
-        super(true, "FT21SenderSW");
+        super(true, "FT21SenderGBN");
     }
 
     public int initialise(int now, int node_id, Node nodeObj, String[] args) {
@@ -47,6 +48,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         BlockSize = Integer.parseInt(args[1]);
         windowsize = Integer.parseInt(args[2]);
         times = new LinkedList<Integer>();
+        repeatedACK = false;
+        negativeACK = false;
 
         state = State.BEGINNING;
         lastPacketSeqN = (int) Math.ceil(file.length() / (double) BlockSize);
@@ -56,9 +59,12 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     }
 
     public void on_clock_tick(int now) {
-        boolean canSend = times.size()<=windowsize && state != State.FINISHED;
+        boolean canSend = times.size()<=windowsize && state != State.FINISHED && nextPacketSeqN<=lastPacketSeqN;
 
         repeatedACK();
+
+        receivedNegativeACK();
+
         timer(now);
 
         changeState();
@@ -101,11 +107,11 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         if (nextPacketSeqN == 0){
             state = State.BEGINNING;
         } else {
-            if(nextPacketSeqN>0){
-                state = State.UPLOADING;
+            if (nextPacketSeqN > lastPacketSeqN){
+                state = State.FINISHING;
             } else {
-                if (nextPacketSeqN > lastPacketSeqN){
-                    state = State.FINISHING;
+                if(nextPacketSeqN>0){
+                    state = State.UPLOADING;
                 }
             }
         }
@@ -116,13 +122,24 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         if(repeatedACK){
             nextPacketSeqN = lastACKRecieved + 1;
             times.clear();
+            repeatedACK = false;
+        }
+    }
+
+    private void receivedNegativeACK(){
+        if(negativeACK){
+            nextPacketSeqN = lastACKRecieved + 1;
+            times.clear();
+            negativeACK = false;
         }
     }
 
     private void timer(int now){
-        if((now - times.get(0)) > TIMEOUT ){
-            nextPacketSeqN = lastACKRecieved + 1;
-            times.clear();
+        if(!times.isEmpty()) {
+            if ((now - times.get(0)) > TIMEOUT) {
+                nextPacketSeqN = lastACKRecieved + 1;
+                times.clear();
+            }
         }
     }
 
@@ -146,10 +163,13 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
         if(lastACKRecieved == ack.cSeqN){
             repeatedACK = true;
-
         } else {
-            lastACKRecieved = ack.cSeqN;
-            times.remove(0);
+            if(ack.cSeqN<0){
+                negativeACK = true;
+            }else {
+                lastACKRecieved = ack.cSeqN;
+                times.remove(0);
+            }
         }
 
 
@@ -160,16 +180,16 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             //return;
         }
 
-        times.remove(0);
-        lastPacketSent = times.get(0);
+       // times.remove(0);
+        //lastPacketSent = times.get(0);
 
     }
 
-    private void checkAKC(FT21_AckPacket ack){
+   /* private void checkAKC(FT21_AckPacket ack){
         if(ack.cSeqN+ windowsize < nextPacketSeqN){
             nextPacketSeqN = ack.cSeqN + 1;
         }
-    }
+    }*/
 
     private FT21_DataPacket readDataPacket(File file, int seqN) {
         try {
