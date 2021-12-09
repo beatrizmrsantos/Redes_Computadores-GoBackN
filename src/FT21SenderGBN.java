@@ -1,6 +1,8 @@
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.util.LinkedList;
+import java.util.List;
 
 import cnss.simulator.Node;
 import ft21.FT21AbstractSenderApplication;
@@ -27,6 +29,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private int nextPacketSeqN, lastPacketSeqN;
     private int windowsize;
     private int lastACKRecieved;
+    private List<Integer> window;
 
     private State state;
     private int lastPacketSent;
@@ -42,6 +45,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         file = new File(args[0]);
         BlockSize = Integer.parseInt(args[1]);
         windowsize = Integer.parseInt(args[2]);
+        window = new LinkedList<Integer>();
 
         state = State.BEGINNING;
         lastPacketSeqN = (int) Math.ceil(file.length() / (double) BlockSize);
@@ -54,7 +58,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         boolean canSend = lastPacketSent < 0 || (now - lastPacketSent) > TIMEOUT;
 
 
-        if (state != State.FINISHED && canSend) {
+        if (state != State.FINISHED && canSend && window.size()<=windowsize) {
             if (state == State.FINISHING && canSend) {
                 sendNextPacket(now);
             } else {
@@ -65,7 +69,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 sendNextPacket(now);
                 nextPacketSeqN++;
             }
-
+            window.add(now);
+            lastPacketSent= window.get(0);
         }
 
         if (lastACKRecieved < 0)
@@ -98,7 +103,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             case FINISHED:
         }
 
-        lastPacketSent = now;
+        //lastPacketSent = now;
     }
 
     @Override
@@ -125,6 +130,10 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             break;
             case FINISHED:
         }
+
+        window.remove(0);
+        lastPacketSent=window.get(0);
+
     }
 
     private void checkAKC(FT21_AckPacket ack){
