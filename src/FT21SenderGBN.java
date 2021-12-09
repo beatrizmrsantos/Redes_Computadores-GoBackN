@@ -50,6 +50,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         times = new LinkedList<Integer>();
         repeatedACK = false;
         negativeACK = false;
+        lastACKRecieved = -1;
 
         state = State.BEGINNING;
         lastPacketSeqN = (int) Math.ceil(file.length() / (double) BlockSize);
@@ -172,13 +173,15 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             }
         }
 
-
-        if(state == State.FINISHING){
-            super.log(now, "All Done. Transfer complete...");
-            super.printReport(now);
-            state = State.FINISHED;
-            //return;
+        if(ack.cSeqN == lastPacketSeqN + 1){
+            if(state == State.FINISHING){
+                super.log(now, "All Done. Transfer complete...");
+                super.printReport(now);
+                state = State.FINISHED;
+                //return;
+            }
         }
+
 
        // times.remove(0);
         //lastPacketSent = times.get(0);
