@@ -60,13 +60,17 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     }
 
     public void on_clock_tick(int now) {
-        boolean canSend = times.size()<=windowsize && state != State.FINISHED && nextPacketSeqN<=lastPacketSeqN;
 
+
+        boolean timeout = timer(now);
+
+        boolean canSend = ((times.size()<windowsize) && (state != State.FINISHED) && (nextPacketSeqN<=lastPacketSeqN +1));
+        //System.out.println(times.size());
         //repeatedACK();
 
         receivedNegativeACK();
 
-        boolean timeout = timer(now);
+
 
         if(canSend) {
             if (timeout) {
