@@ -31,7 +31,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private int lastACKRecieved;
     private boolean negativeACK;
     private boolean repeatedACK;
-    private boolean lastsended = false;
+    private boolean lastSent = false;
+    private boolean firstSent = false;
     private SortedMap<Integer, Integer> times;
 
     private State state;
@@ -65,34 +66,47 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         boolean timeout = timer(now);
 
         boolean canSend = ((times.size()<windowsize) && (state != State.FINISHED) && (nextPacketSeqN<=lastPacketSeqN));
-        //System.out.println(times.size());
-        //repeatedACK();
 
         receivedNegativeACK();
 
 
+        sendFirst(now);
 
-        if(canSend) {
+        sendLast(now);
+
+        if(canSend && lastACKRecieved>=0) {
+            changeState();
             if (timeout) {
-                changeState();
                 sendNextPacket(now);
                 nextPacketSeqN++;
                 repeatedACK = false;
             } else if (!repeatedACK) {
-                changeState();
                 sendNextPacket(now);
                 nextPacketSeqN++;
             }
         }
 
-        if(!lastsended) {
-            if (nextPacketSeqN == lastPacketSeqN + 1) {
+
+    }
+    private void sendFirst(int now){
+        if(!firstSent) {
+            if (lastACKRecieved == -1) {
+                sendNextPacket(now);
+                nextPacketSeqN++;
+                firstSent =true;
+            }
+        }
+    }
+
+    private void sendLast(int now){
+        if(!lastSent) {
+          //  if (nextPacketSeqN == lastPacketSeqN + 1) {
                 if (lastPacketSeqN == lastACKRecieved) {
                     changeState();
                     sendNextPacket(now);
-                    lastsended=true;
+                    lastSent =true;
                 }
-            }
+           // }
         }
     }
 
@@ -134,7 +148,10 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             int first = times.firstKey();
             if ((now - times.get(first)) > TIMEOUT) {
                 if(nextPacketSeqN== lastPacketSeqN+1){
-                    lastsended=false;
+                    lastSent =false;
+                }
+                if(lastACKRecieved==-1){
+                    firstSent =false;
                 }
                 nextPacketSeqN = lastACKRecieved + 1;
                 times.clear();
@@ -180,7 +197,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 super.log(now, "All Done. Transfer complete...");
                 super.printReport(now);
                 state = State.FINISHED;
-                //return;
+                return;
             }
         }
 
