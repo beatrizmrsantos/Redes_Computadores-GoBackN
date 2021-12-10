@@ -62,18 +62,21 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     public void on_clock_tick(int now) {
         boolean canSend = times.size()<=windowsize && state != State.FINISHED && nextPacketSeqN<=lastPacketSeqN;
 
-        repeatedACK();
+        //repeatedACK();
 
         receivedNegativeACK();
 
-        timer(now);
-
-        changeState();
-
-        if(canSend){
+        if(canSend && timer(now)){
+            changeState();
+            sendNextPacket(now);
+            nextPacketSeqN++;
+            repeatedACK = false;
+        }else if(canSend &&  !repeatedACK){
+            changeState();
             sendNextPacket(now);
             nextPacketSeqN++;
         }
+
 
         /*
         if (state != State.FINISHED && canSend && times.size()<=windowsize) {
@@ -119,13 +122,13 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
     }
 
-    private void repeatedACK(){
+   /* private void repeatedACK(){
         if(repeatedACK){
             nextPacketSeqN = lastACKRecieved + 1;
             times.clear();
             repeatedACK = false;
         }
-    }
+    }*/
 
     private void receivedNegativeACK(){
         if(negativeACK){
@@ -135,13 +138,16 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         }
     }
 
-    private void timer(int now){
+    private boolean timer(int now){
+        boolean timeout=false;
         if(!times.isEmpty()) {
             if ((now - times.get(0)) > TIMEOUT) {
                 nextPacketSeqN = lastACKRecieved + 1;
                 times.clear();
+                timeout=true;
             }
         }
+        return timeout;
     }
 
     private void sendNextPacket(int now) {
