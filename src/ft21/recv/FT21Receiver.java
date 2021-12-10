@@ -36,7 +36,7 @@ public class FT21Receiver extends FT21AbstractReceiverApplication {
 	@Override
 	public void on_receive_upload(int now, int client, FT21_UploadPacket upload) {
 		super.logPacket(now, upload);
-		
+
 		if (nextSeqN <= 1) {
 			super.sendPacket(now, client, new FT21_AckPacket(0, upload.optional_data));
 			nextSeqN = 1;
@@ -50,16 +50,16 @@ public class FT21Receiver extends FT21AbstractReceiverApplication {
 	@Override
 	public void on_receive_data(int now, int client, FT21_DataPacket block) {
 		super.logPacket(now, block);
-		
+
 		// outside the window.
-		if (block.seqN < nextSeqN || block.seqN > nextSeqN + windowSize) {
+		if (block.seqN < nextSeqN || block.seqN >= nextSeqN + windowSize) {
 			int cSeqN = (windowSize == 1 ? nextSeqN - 1 : -(nextSeqN - 1));
-			super.sendPacket(now, client, new FT21_AckPacket( cSeqN, block.optional_data));			
+			super.sendPacket(now, client, new FT21_AckPacket( cSeqN, block.optional_data));
 		}
 		else {
-			
+
 			window.putIfAbsent(block.seqN, block.data);
-			
+
 			//try to slide window and flush to disk.
 			byte[] bytes;
 			while ((bytes = window.remove(nextSeqN)) != null) {
@@ -73,7 +73,7 @@ public class FT21Receiver extends FT21AbstractReceiverApplication {
 	@Override
 	public void on_receive_fin(int now, int client, FT21_FinPacket fin) {
 		super.logPacket(now, fin);
-		
+
 		if (window.isEmpty() && nextSeqN == fin.seqN)
 			super.printReport( now );
 

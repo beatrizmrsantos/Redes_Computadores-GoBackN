@@ -1,4 +1,3 @@
-
 import java.io.File;
 import java.io.RandomAccessFile;
 
@@ -42,52 +41,53 @@ public class FT21SenderSW extends FT21AbstractSenderApplication {
 
 		state = State.BEGINNING;
 		lastPacketSeqN = (int) Math.ceil(file.length() / (double) BlockSize);
-		
+
 		lastPacketSent = -1;
 		return 1;
 	}
 
 	public void on_clock_tick(int now) {
 		boolean canSend = lastPacketSent < 0 || (now - lastPacketSent) > TIMEOUT;
-		
+
 		if (state != State.FINISHED && canSend)
 			sendNextPacket(now);
-		
+
 	}
 
 	private void sendNextPacket(int now) {
 		switch (state) {
-		case BEGINNING:
-			super.sendPacket(now, RECEIVER, new FT21_UploadPacket(file.getName()));
-			break;
-		case UPLOADING:
-			super.sendPacket(now, RECEIVER, readDataPacket(file, nextPacketSeqN));
-			break;
-		case FINISHING:
-			super.sendPacket(now, RECEIVER, new FT21_FinPacket(nextPacketSeqN));
-			break;
-		case FINISHED:
+			case BEGINNING:
+				super.sendPacket(now, RECEIVER, new FT21_UploadPacket(file.getName()));
+				break;
+			case UPLOADING:
+				super.sendPacket(now, RECEIVER, readDataPacket(file, nextPacketSeqN));
+				break;
+			case FINISHING:
+				super.sendPacket(now, RECEIVER, new FT21_FinPacket(nextPacketSeqN));
+				break;
+			case FINISHED:
 		}
-		
+
 		lastPacketSent = now;
 	}
 
 	@Override
 	public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
 		switch (state) {
-		case BEGINNING:
-			state = State.UPLOADING;
-		case UPLOADING:
-			nextPacketSeqN = ack.cSeqN + 1;
-			if (nextPacketSeqN > lastPacketSeqN)
-				state = State.FINISHING;
-			break;
-		case FINISHING:
-			super.log(now, "All Done. Transfer complete...");
-			super.printReport(now);
-			state = State.FINISHED;
-			return;
-		case FINISHED:
+			case BEGINNING:
+				state = State.UPLOADING;
+			case UPLOADING:
+				nextPacketSeqN = ack.cSeqN + 1;
+				if (nextPacketSeqN > lastPacketSeqN)
+					state = State.FINISHING;
+				lastPacketSent = -1;
+				break;
+			case FINISHING:
+				super.log(now, "All Done. Transfer complete...");
+				super.printReport(now);
+				state = State.FINISHED;
+				return;
+			case FINISHED:
 		}
 	}
 

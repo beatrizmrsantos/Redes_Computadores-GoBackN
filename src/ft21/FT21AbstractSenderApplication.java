@@ -41,16 +41,18 @@ abstract public class FT21AbstractSenderApplication extends AbstractApplicationA
 		int src = cnssPkt.getSource();
 		byte[] bytes = cnssPkt.getPayload();
 
-		stats.in.increment(TRAFFIC, cnssPkt.getSize());		
+		stats.in.increment(TRAFFIC, cnssPkt.getSize());
 
 		switch (PacketType.values()[bytes[0]]) {
-		case ACK:
-			this.on_receive_ack(now, src, new FT21_AckPacket(bytes));
-			break;
-		case ERROR:
-		default:
-			System.out.println("FATAL ERROR...");
-			System.exit(-1);
+			case ACK:
+				FT21_AckPacket ack = new FT21_AckPacket(bytes);
+				this.logPacket(now, ack);
+				this.on_receive_ack(now, src, ack);
+				break;
+			case ERROR:
+			default:
+				System.out.println("FATAL ERROR...");
+				System.exit(-1);
 		}
 	}
 
@@ -72,7 +74,7 @@ abstract public class FT21AbstractSenderApplication extends AbstractApplicationA
 	protected void on_receive_ack(int now, int src, FT21_AckPacket ack) {
 		this.logPacket( now, ack);
 	}
-	
+
 	protected void logPacket( int now, FT21Packet pkt ) {
 		super.log(now, "GOT: " + pkt);
 		stats.in.increment(pkt.getClass().getSimpleName(), 1);
