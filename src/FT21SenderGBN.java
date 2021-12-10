@@ -27,16 +27,30 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private RandomAccessFile raf;
     private int BlockSize;
     private int nextPacketSeqN, lastPacketSeqN;
+
+    //size of window.
     private int windowsize;
-    private int lastACKRecieved;
-    private boolean negativeACK;
+
+    //last ack received.
+    private int lastACKReceived;
+
+    //value of the negative ack received.
+    private int negativeACK;
+
+    //true if received repeated acks, false if not.
     private boolean repeatedACK;
+
+    // true if the last package (fin) was sent, false if not.
     private boolean lastSent = false;
+
+    //true if the first package (upload) was sent, false if not.
     private boolean firstSent = false;
+
+    //map of the times of when the packages were sent.
+    // The key is the number of the package and the object is the time.
     private SortedMap<Integer, Integer> times;
 
     private State state;
-   // private int lastPacketSent;
 
     public FT21SenderGBN() {
         super(true, "FT21SenderGBN");
@@ -51,16 +65,16 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         windowsize = Integer.parseInt(args[2]);
         times = new TreeMap<>();
         repeatedACK = false;
-        negativeACK = false;
-        lastACKRecieved = -1;
+        negativeACK = -1;
+        lastACKReceived = -1;
 
         state = State.BEGINNING;
         lastPacketSeqN = (int) Math.ceil(file.length() / (double) BlockSize);
 
-        //lastPacketSent = -1;
         return 1;
     }
 
+    // on each time clock checks if occurred a time out of the first package of the map, checks if it has all the conditions needed to send the next package
     public void on_clock_tick(int now) {
 
         boolean timeout = timer(now);
@@ -74,7 +88,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
         sendLast(now);
 
-        if(canSend && lastACKRecieved>=0) {
+        if(canSend && lastACKReceived >=0) {
             changeState();
             if (timeout) {
                 sendNextPacket(now);
@@ -88,9 +102,11 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
 
     }
+
+    // sends the first package (Upload)
     private void sendFirst(int now){
         if(!firstSent) {
-            if (lastACKRecieved == -1) {
+            if (lastACKReceived == -1) {
                 sendNextPacket(now);
                 nextPacketSeqN++;
                 firstSent =true;
@@ -98,18 +114,18 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         }
     }
 
+    // sends the last package (Fin)
     private void sendLast(int now){
         if(!lastSent) {
-          //  if (nextPacketSeqN == lastPacketSeqN + 1) {
-                if (lastPacketSeqN == lastACKRecieved) {
-                    changeState();
-                    sendNextPacket(now);
-                    lastSent =true;
-                }
-           // }
+            if (lastPacketSeqN == lastACKReceived) {
+                changeState();
+                sendNextPacket(now);
+                lastSent = true;
+            }
         }
     }
 
+    // changes the state of the next packaging being sent depending on the number of the package
     private void changeState(){
 
         if (nextPacketSeqN == 0){
@@ -126,22 +142,17 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
     }
 
-   /* private void repeatedACK(){
-        if(repeatedACK){
-            nextPacketSeqN = lastACKRecieved + 1;
-            times.clear();
-            repeatedACK = false;
-        }
-    }*/
-
+    //the package that was received with negative ack is the next to be sent
     private void receivedNegativeACK(){
-        if(negativeACK){
-            nextPacketSeqN = lastACKRecieved + 1;
+        if(negativeACK>0){
+            nextPacketSeqN = negativeACK;
             times.clear();
-            negativeACK = false;
+            negativeACK = -1;
         }
     }
 
+    //checks if the first package, that was sent and didn't receive yet its ACK, has past the timeout value.
+    //By comparing the time now with the time at it was sent
     private boolean timer(int now){
         boolean timeout=false;
         if(!times.isEmpty()) {
@@ -150,10 +161,10 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 if(nextPacketSeqN== lastPacketSeqN+1){
                     lastSent =false;
                 }
-                if(lastACKRecieved==-1){
+                if(lastACKReceived ==-1){
                     firstSent =false;
                 }
-                nextPacketSeqN = lastACKRecieved + 1;
+                nextPacketSeqN = lastACKReceived + 1;
                 times.clear();
                 timeout=true;
             }
@@ -161,6 +172,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         return timeout;
     }
 
+    // sends the package and adds the time it was sent to the map of packages that didn't receive their ack
     private void sendNextPacket(int now) {
         switch (state) {
             case BEGINNING:
@@ -177,15 +189,19 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         times.put(nextPacketSeqN, now);
     }
 
+
+    // receives the ack from the receiver .
+    //If the ack is the same as the last it signals so that a package was lost.
+    //Also, it can identify if the ack receives was negative
     @Override
     public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
-        if(lastACKRecieved == ack.cSeqN){
+        if(lastACKReceived == ack.cSeqN){
             repeatedACK = true;
         } else {
             if(ack.cSeqN<0){
-                negativeACK = true;
+                negativeACK = ack.cSeqN * (-1) ;
             }else {
-                lastACKRecieved = ack.cSeqN;
+                lastACKReceived = ack.cSeqN;
                 if(!times.isEmpty()){
                     deleteAckReceived();
                 }
@@ -203,8 +219,9 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
     }
 
+    //deletes from the map the key with the same value as the ACK
    private void deleteAckReceived(){
-        for(int i = 0; i <= lastACKRecieved; i++){
+        for(int i = 0; i <= lastACKReceived; i++){
             times.remove(i);
         }
    }
