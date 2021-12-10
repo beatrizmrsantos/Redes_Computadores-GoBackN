@@ -208,6 +208,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             }
         }
 
+        //if the ack received is the fin then state changes to finishing
         if(ack.cSeqN == lastPacketSeqN + 1){
             if(state == State.FINISHING){
                 super.log(now, "All Done. Transfer complete...");
