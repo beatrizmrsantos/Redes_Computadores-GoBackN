@@ -1,8 +1,8 @@
 
 import java.io.File;
 import java.io.RandomAccessFile;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import cnss.simulator.Node;
 import ft21.FT21AbstractSenderApplication;
@@ -31,7 +31,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private int lastACKRecieved;
     private boolean negativeACK;
     private boolean repeatedACK;
-    private List<Integer> times;
+    private SortedMap<Integer, Integer> times;
 
     private State state;
    // private int lastPacketSent;
@@ -47,7 +47,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         file = new File(args[0]);
         BlockSize = Integer.parseInt(args[1]);
         windowsize = Integer.parseInt(args[2]);
-        times = new LinkedList<Integer>();
+        times = new TreeMap<>();
         repeatedACK = false;
         negativeACK = false;
         lastACKRecieved = -1;
@@ -66,44 +66,20 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
         receivedNegativeACK();
 
-        if(canSend && timer(now)){
-            changeState();
-            sendNextPacket(now);
-            nextPacketSeqN++;
-            repeatedACK = false;
-        }else if(canSend &&  !repeatedACK){
-            changeState();
-            sendNextPacket(now);
-            nextPacketSeqN++;
-        }
+        boolean timeout = timer(now);
 
-
-        /*
-        if (state != State.FINISHED && canSend && times.size()<=windowsize) {
-            if (state == State.FINISHING && canSend) {
+        if(canSend) {
+            if (timeout) {
+                changeState();
                 sendNextPacket(now);
-            } else {
-                if (lastACKRecieved < 0) {
-                    nextPacketSeqN = 0;
-                    state = State.BEGINNING;
-                }
+                nextPacketSeqN++;
+                repeatedACK = false;
+            } else if (!repeatedACK) {
+                changeState();
                 sendNextPacket(now);
                 nextPacketSeqN++;
             }
-            times.add(now);
-            lastPacketSent= times.get(0);
         }
-
-        if (lastACKRecieved < 0)
-            state = State.BEGINNING;
-
-        if(nextPacketSeqN>0)
-            state = State.UPLOADING;
-
-        if (nextPacketSeqN > lastPacketSeqN)
-            state = State.FINISHING;
-
-        */
     }
 
     private void changeState(){
@@ -141,7 +117,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private boolean timer(int now){
         boolean timeout=false;
         if(!times.isEmpty()) {
-            if ((now - times.get(0)) > TIMEOUT) {
+            int first = times.firstKey();
+            if ((now - times.get(first)) > TIMEOUT) {
                 nextPacketSeqN = lastACKRecieved + 1;
                 times.clear();
                 timeout=true;
@@ -163,7 +140,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 break;
             case FINISHED:
         }
-        times.add(now);
+        times.put(nextPacketSeqN, now);
     }
 
     @Override
@@ -175,7 +152,9 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 negativeACK = true;
             }else {
                 lastACKRecieved = ack.cSeqN;
-                times.remove(0);
+                if(!times.isEmpty()){
+                    deleteAckReceived();
+                }
             }
         }
 
@@ -188,17 +167,13 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
             }
         }
 
-
-       // times.remove(0);
-        //lastPacketSent = times.get(0);
-
     }
 
-   /* private void checkAKC(FT21_AckPacket ack){
-        if(ack.cSeqN+ windowsize < nextPacketSeqN){
-            nextPacketSeqN = ack.cSeqN + 1;
+   private void deleteAckReceived(){
+        for(int i = 0; i <= lastACKRecieved; i++){
+            times.remove(i);
         }
-    }*/
+   }
 
     private FT21_DataPacket readDataPacket(File file, int seqN) {
         try {
