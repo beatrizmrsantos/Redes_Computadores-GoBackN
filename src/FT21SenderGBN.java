@@ -214,7 +214,6 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
                 super.log(now, "All Done. Transfer complete...");
                 super.printReport(now);
                 state = State.FINISHED;
-                return;
             }
         }
 
