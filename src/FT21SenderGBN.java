@@ -47,7 +47,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     private boolean firstSent = false;
 
     //map of the times of when the packages were sent.
-    // The key is the number of the package and the object is the time.
+    //The key is the number of the package and the object is the time.
     private SortedMap<Integer, Integer> times;
 
     private State state;
@@ -74,7 +74,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         return 1;
     }
 
-    // on each time clock checks if occurred a time out of the first package of the map, checks if it has all the conditions needed to send the next package
+    //on each time clock checks if occurred a time out of the first package of the map, checks if it has all the conditions needed to send the next package
     public void on_clock_tick(int now) {
 
         boolean timeout = timer(now);
