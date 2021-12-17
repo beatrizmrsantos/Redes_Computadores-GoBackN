@@ -34,9 +34,6 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
     //last ack received.
     private int lastACKReceived;
 
-    //value of the negative ack received.
-    private int negativeACK;
-
     //true if received repeated acks, false if not.
     private boolean repeatedACK;
 
@@ -65,7 +62,6 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
         windowsize = Integer.parseInt(args[2]);
         times = new TreeMap<>();
         repeatedACK = false;
-        negativeACK = -1;
         lastACKReceived = -1;
 
         state = State.BEGINNING;
